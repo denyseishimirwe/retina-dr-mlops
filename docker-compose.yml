@@ -23,3 +23,8 @@ services:
       - "8501:8501"
     depends_on:
       - nginx
+  api:
+    restart: unless-stopped
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data    
