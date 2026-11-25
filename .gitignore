@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/uploads/
+models/backup_*
+.venv/
+.DS_Store
