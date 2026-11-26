@@ -67,12 +67,12 @@ The full workflow, with charts and metrics, is in `notebook/retina_dr.ipynb`.
 
 ## Features
 
-1. **Predict** one retina image and see the class, confidence and probabilities.
-2. **Visualizations** of the dataset with interpretations (class distribution, brightness, mean red channel).
-3. **Upload** many new images for a chosen class (saved to `data/uploads/`).
-4. **Retrain** with one button. The uploaded images are preprocessed and the existing model is loaded as the pre-trained model and fine-tuned. The previous model is backed up, the new one is saved and re-evaluated on the test set, and the used images move into the training data.
-5. **Auto-trigger:** retraining also starts automatically once 50 uploaded images are waiting (`AUTO_RETRAIN_THRESHOLD`).
-6. **Dashboard** with API up-time, retraining status and last retrain metrics.
+The Streamlit UI has four pages:
+
+1. **Dashboard** — API up-time, retraining status, pending uploads, and last retrain metrics (accuracy, macro-F1).
+2. **Predict** — upload one retina image; see the class, confidence and class probabilities.
+3. **Visualizations** — class counts, average brightness and mean red channel (from `/insights`).
+4. **Retrain** — upload labelled images to `data/uploads/`, then start retraining. The existing model is loaded as the pre-trained weights and fine-tuned. The previous model is backed up, the new one is saved and re-evaluated on the held-out test set, and used images move into the training data. Retraining also starts automatically once 50 uploads are waiting (`AUTO_RETRAIN_THRESHOLD`).
 
 ## Project structure
 
@@ -87,6 +87,7 @@ retina-dr-mlops/
 ├── Dockerfile.ui
 ├── requirements-api.txt
 ├── requirements-ui.txt
+├── config.toml             # Streamlit theme
 ├── notebook/retina_dr.ipynb
 ├── src/
 │   ├── preprocessing.py    # loading, resizing, datasets
@@ -96,9 +97,10 @@ retina-dr-mlops/
 ├── data/
 │   ├── train/              # one folder per class
 │   └── test/
-└── models/
-    ├── retina_model.keras
-    └── meta.json
+├── models/
+│   ├── retina_model.keras
+│   └── meta.json
+└── results/                # Locust CSVs (1, 2 and 3 API containers)
 ```
 
 ## API endpoints
@@ -130,6 +132,8 @@ The first build takes several minutes because TensorFlow is large. Wait about a 
 
 Stop everything with `docker compose down`.
 
+The API image uses `tensorflow-cpu` so it runs on a CPU EC2 instance.
+
 ## Load test (Locust)
 
 Put one retina image next to `locustfile.py` and name it `sample.png`, then run:
@@ -160,13 +164,11 @@ Tests ran locally with Docker on a MacBook, with 50 simulated users for 60 secon
 
 ## Cloud deployment
 
-Deployed on AWS EC2 (Ubuntu, Docker Compose, Elastic IP). **Fill in the instance type and region here before you submit** (example: `t3.large`, `eu-north-1`). Ports 8501 (UI) and 8080 (API) are open. The `models/` and `data/` folders are mounted as Docker volumes, so retrained models and uploaded images survive restarts. The live demo runs one API container.
+Deployed on **AWS EC2** in **eu-north-1** (Stockholm): Ubuntu, Docker Compose, Elastic IP `13.49.46.69`. Security group opens **8501** (UI) and **8080** (API). The API runs `tensorflow-cpu`. The `models/` and `data/` folders are mounted as Docker volumes, so retrained models and uploaded images survive restarts. The live demo runs **one** API container.
 
 ### Evaluation in production
 
-On the live app, uploading 10 new images and pressing Retrain re-evaluated the updated model on the 550 held-out test images: accuracy 0.865 and macro-F1 0.765, compared with 0.869 and 0.777 for the original deployed model. The small change is expected when fine-tuning on only 10 images. Dashboard metrics (`/uptime`, `/status`, last retrain JSON) are the production evaluation view: they show the API is up and they report accuracy and macro-F1 after retraining.
-
-Paste the YouTube demo URL in the Links table once the recording is up.
+On the live app, uploading 10 new images and pressing Retrain re-evaluated the updated model on the 550 held-out test images: accuracy 0.865 and macro-F1 0.765, compared with 0.869 and 0.777 for the original deployed model. The small change is expected when fine-tuning on only 10 images. The Dashboard (`/uptime`, `/status`, last retrain metrics) is the production evaluation view: it shows the API is up and it reports accuracy and macro-F1 after retraining.
 
 ## Limitations
 
