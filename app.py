@@ -5,6 +5,20 @@ import pandas as pd
 import requests
 import streamlit as st
 
+
+def _box(bg, edge, text):
+    st.markdown(
+        f'<div style="background:{bg};color:#1C2126;border:1px solid #DAD6CB;'
+        f'border-left:4px solid {edge};border-radius:4px;padding:14px 18px;'
+        f'margin:8px 0 16px;font-size:15px;word-break:break-word;">'
+        f'{html.escape(str(text))}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+st.error = lambda text, *a, **k: _box("#FBEFED", "#A3382E", text)
+st.success = lambda text, *a, **k: _box("#F0F5EC", "#4F7A3A", text)
+
 API = os.getenv("API_URL", "http://localhost:8000")
 CLASSES = ["No_DR", "Mild_Moderate", "Severe_Proliferative"]
 LABEL = {
@@ -73,12 +87,6 @@ st.markdown("""
 .cell-value { font-size: 1.35rem; font-weight: 500; }
 .note { color: var(--muted); font-size: 0.92rem; margin: 0.1rem 0 1.4rem; max-width: 46rem; }
 
-/* Custom result boxes */
-.alert { padding: 0.85rem 1.1rem; margin: 0.5rem 0 1rem; border-radius: 4px;
-  background: #FFFFFF; border: 1px solid var(--rule); border-left: 4px solid var(--primary);
-  color: var(--ink); font-size: 0.95rem; word-break: break-word; }
-.alert.error { background: #FBEFED; border-left-color: #A3382E; }
-.alert.success { background: #F0F5EC; border-left-color: #4F7A3A; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -91,18 +99,6 @@ page = st.sidebar.radio(
 
 def esc(x):
     return html.escape(str(x))
-
-
-def alert(kind, text):
-    st.markdown(f'<div class="alert {kind}">{esc(text)}</div>', unsafe_allow_html=True)
-
-
-def err(text):
-    alert("error", text)
-
-
-def ok(text):
-    alert("success", text)
 
 
 def note(text):
@@ -152,7 +148,7 @@ def status_band(s):
             ("Finished", m.get("timestamp", "-"), True),
         ])
     if s.get("last_error"):
-        err(s["last_error"])
+        st.error(s["last_error"])
 
 
 # ----------------------------------------------------------------- Dashboard
@@ -174,9 +170,9 @@ if page == "Dashboard":
                 ("New images", m["trained_on_new_images"], True),
             ])
         if s.get("last_error"):
-            err(s["last_error"])
+            st.error(s["last_error"])
     except Exception as e:
-        err(str(e))
+        st.error(str(e))
 
 # ------------------------------------------------------------------- Predict
 elif page == "Predict":
@@ -188,10 +184,10 @@ elif page == "Predict":
             r = requests.post(f"{API}/predict", files={"file": (f.name, f.getvalue(), f.type)}, timeout=120)
             if r.ok:
                 j = r.json()
-                ok(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.1%}")
+                st.success(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.1%}")
                 bars(j["probabilities"], 1.0, fmt="{:.1%}", highlight=j["prediction"])
             else:
-                err(r.text)
+                st.error(r.text)
 
 # ------------------------------------------------------------ Visualizations
 elif page == "Visualizations":
@@ -213,7 +209,7 @@ elif page == "Visualizations":
              "us little. A deep model is needed to learn patterns such as red dots and "
              "yellow patches.")
     except Exception as e:
-        err(str(e))
+        st.error(str(e))
 
 # ---------------------------------------------------------------- Evaluation
 elif page == "Evaluation":
@@ -257,7 +253,7 @@ elif page == "Evaluation":
         else:
             note("No retraining yet. The deployed model is the reference model.")
     except Exception as e:
-        err(str(e))
+        st.error(str(e))
 
 # ------------------------------------------------------------------- Retrain
 else:
@@ -276,15 +272,15 @@ else:
         )
         if r.ok:
             j = r.json()
-            ok(f"{j['saved']} saved · {j['pending_total']} pending")
+            st.success(f"{j['saved']} saved · {j['pending_total']} pending")
         else:
-            err(r.text)
+            st.error(r.text)
     if st.button("Retrain"):
         r = requests.post(f"{API}/retrain", timeout=30)
         if r.ok:
-            ok("Retraining started")
+            st.success("Retraining started")
         else:
-            err(r.text)
+            st.error(r.text)
 
     st.subheader("Live status")
 
@@ -293,7 +289,7 @@ else:
         try:
             s = requests.get(f"{API}/status", timeout=10).json()
         except Exception as e:
-            err(str(e))
+            st.error(str(e))
             return
         status_band(s)
 
