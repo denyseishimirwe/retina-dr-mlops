@@ -119,8 +119,7 @@ CSS = """
 .axis { font-size: 0.78rem; color: var(--faint); margin-top: 0.35rem; }
 
 /* Notes (replace default alert boxes) */
-.note { border-left: 3px solid var(--rule-strong); background: var(--side); padding: 0.65rem 0.95rem; font-size: 0.9rem; line-height: 1.5; margin: 0.75rem 0; }
-.note.ok { border-left-color: var(--ok); }
+.note { border-left: 3px solid var(--rule-strong); background: transparent; color: var(--ink); padding: 0.65rem 0.95rem; font-size: 0.9rem; line-height: 1.5; margin: 0.75rem 0; }.note.ok { border-left-color: var(--ok); }
 .note.warn { border-left-color: var(--warn); }
 .note.bad { border-left-color: var(--bad); }
 .note code { font-size: 0.85em; background: transparent; padding: 0; }
