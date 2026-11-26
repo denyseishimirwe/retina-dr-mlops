@@ -7,11 +7,14 @@ import streamlit as st
 
 
 def _box(bg, edge, text):
+    # Explicit high-contrast colours keep status messages readable.
     st.markdown(
-        f'<div style="background:{bg};color:#1C2126;border:1px solid #DAD6CB;'
-        f'border-left:4px solid {edge};border-radius:4px;padding:14px 18px;'
-        f'margin:8px 0 16px;font-size:15px;word-break:break-word;">'
-        f'{html.escape(str(text))}</div>',
+        f'<div style="background:{bg} !important;color:#1C2126 !important;'
+        f'border:1px solid {edge};border-left:4px solid {edge};'
+        f'border-radius:4px;padding:14px 18px;margin:8px 0 16px;'
+        f'font-size:15px;font-weight:500;word-break:break-word;">'
+        f'<span style="color:#1C2126 !important;">{html.escape(str(text))}</span>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -61,6 +64,19 @@ st.markdown("""
 .stApp h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
 .stApp h2, .stApp h3 { font-size: 1rem; font-weight: 600; }
 .stApp p, .stApp li, .stApp label, .stApp span { color: var(--ink); }
+
+/* Keep Streamlit messages readable even when its theme changes. */
+[data-testid="stAlert"] {
+  color: #1C2126 !important;
+}
+[data-testid="stAlert"] *,
+[data-testid="stNotification"] * {
+  color: #1C2126 !important;
+}
+[data-testid="stAlert"] {
+  background: #F0F5EC !important;
+  border: 1px solid #4F7A3A !important;
+}
 [data-testid="stCaptionContainer"] { display: none !important; }
 [data-testid="stFileUploaderDropzoneInstructions"] small { display: none !important; }
 .stApp button[data-testid="stBaseButton-secondary"], .stApp button[kind="secondary"],
