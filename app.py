@@ -55,6 +55,11 @@ st.markdown("""
 .bar-fill { height: 100%; border-radius: 2px; }
 .bar-val { text-align: right; font-size: 0.875rem; }
 .mk { display: inline-block; width: 8px; height: 8px; margin-right: 0.5rem; vertical-align: 0.05em; }
+.band { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--rule); margin: 0.5rem 0 1.5rem; }
+.cell { padding: 1rem 1.1rem 1.1rem 0; }
+.cell + .cell { border-left: 1px solid var(--rule); padding-left: 1.1rem; }
+.cell-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
+.cell-value { font-size: 1.35rem; font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,17 +92,31 @@ if page == "Dashboard":
     try:
         up = requests.get(f"{API}/uptime", timeout=10).json()["uptime_seconds"]
         s = requests.get(f"{API}/status", timeout=10).json()
-        c1, c2, c3 = st.columns(3)
-        c1.metric("API up-time (seconds)", int(up))
-        c2.metric("Retraining", s["status"])
-        c3.metric("Pending uploads", s["pending_uploads"])
+        st.markdown(
+            f'<div class="band">'
+            f'<div class="cell"><div class="cell-label">Up-time</div>'
+            f'<div class="cell-value mono">{int(up)}s</div></div>'
+            f'<div class="cell"><div class="cell-label">Retraining</div>'
+            f'<div class="cell-value">{esc(s["status"])}</div></div>'
+            f'<div class="cell"><div class="cell-label">Pending uploads</div>'
+            f'<div class="cell-value mono">{s["pending_uploads"]}</div></div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
         if s.get("last_metrics"):
             st.subheader("Last retrain")
             m = s["last_metrics"]
-            a, b, c = st.columns(3)
-            a.metric("Accuracy", f"{m['accuracy']:.1%}")
-            b.metric("Macro-F1", f"{m['macro_f1']:.3f}")
-            c.metric("New images", m["trained_on_new_images"])
+            st.markdown(
+                f'<div class="band">'
+                f'<div class="cell"><div class="cell-label">Accuracy</div>'
+                f'<div class="cell-value mono">{m["accuracy"]:.1%}</div></div>'
+                f'<div class="cell"><div class="cell-label">Macro-F1</div>'
+                f'<div class="cell-value mono">{m["macro_f1"]:.3f}</div></div>'
+                f'<div class="cell"><div class="cell-label">New images</div>'
+                f'<div class="cell-value mono">{m["trained_on_new_images"]}</div></div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         if s.get("last_error"):
             st.error(s["last_error"])
     except Exception as e:
