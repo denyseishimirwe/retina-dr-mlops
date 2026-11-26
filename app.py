@@ -17,7 +17,8 @@ if page == "Dashboard":
         st.metric("Retraining status", s["status"])
         st.metric("Pending uploads", s["pending_uploads"])
         if s.get("last_metrics"):
-            st.subheader("Last retrain results"); st.json(s["last_metrics"])
+            st.subheader("Last retrain results (test-set evaluation)")
+            st.json(s["last_metrics"])
         if s.get("last_error"):
             st.error(s["last_error"])
     except Exception as e:
@@ -39,17 +40,40 @@ elif page == "Predict":
 
 elif page == "Visualizations":
     st.title("Data insights")
+    st.caption("Three image features from the training set, and what they say about diabetic retinopathy screening.")
     try:
         d = requests.get(f"{API}/insights", timeout=300).json()
-        st.subheader("1. Images per class"); st.bar_chart(pd.Series(d["counts"]))
-        st.subheader("2. Average brightness per class"); st.bar_chart(pd.Series(d["brightness"]))
-        st.subheader("3. Average red channel per class"); st.bar_chart(pd.Series(d["red_mean"]))
-        st.info("Write your interpretation of each chart here before submitting.")
+        st.subheader("1. Images per class")
+        st.bar_chart(pd.Series(d["counts"]))
+        st.markdown(
+            "**Story:** No_DR is the largest class and Severe_Proliferative is the smallest "
+            "(about 9:1 in the original 5-grade data: 1,805 No_DR vs 193 Severe). "
+            "A model that always guessed “healthy” would look decent on accuracy. "
+            "That is why training uses class weights and why macro-F1 is the main metric, "
+            "not accuracy."
+        )
+        st.subheader("2. Average brightness per class")
+        st.bar_chart(pd.Series(d["brightness"]))
+        st.markdown(
+            "**Story:** Mean brightness sits in a tight band across classes (about 68–73 in the notebook sample) "
+            "and the spreads overlap. Brightness is mostly camera exposure and lighting, not disease. "
+            "It cannot separate healthy from DR, so the model has to learn local patterns instead of a global brightness cue."
+        )
+        st.subheader("3. Average red channel per class")
+        st.bar_chart(pd.Series(d["red_mean"]))
+        st.markdown(
+            "**Story:** Mean red is slightly lower for Severe_Proliferative than for No_DR "
+            "(about 108 vs 122 in the notebook sample), but the overlap is large. "
+            "Haemorrhages and lesions are red, yet a single colour average washes them out. "
+            "That is why a convolutional model is needed: it can pick up small red dots and yellow patches "
+            "that a dataset-wide red mean cannot."
+        )
     except Exception as e:
         st.error(e)
 
 else:
     st.title("Upload new data and retrain")
+    st.write("Upload several labelled images, then press **Trigger retraining**. Retraining also starts on its own once 50 images are waiting.")
     label = st.selectbox("Class of these images", CLASSES)
     files = st.file_uploader("Upload multiple images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
     if files and st.button("Upload"):

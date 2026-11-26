@@ -4,3 +4,4 @@ data/uploads/
 models/backup_*
 .venv/
 .DS_Store
+models/retina_model.h5

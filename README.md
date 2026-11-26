@@ -118,7 +118,7 @@ retina-dr-mlops/
 You need Docker and Docker Compose.
 
 ```bash
-git clone PASTE_REPO_LINK_HERE
+git clone https://github.com/denyseishimirwe/retina-dr-mlops.git
 cd retina-dr-mlops
 docker compose up -d --build
 ```
@@ -152,17 +152,21 @@ locust -f locustfile.py --headless -u 50 -r 5 -t 60s --host http://localhost:808
 
 | API containers | Requests | Failures | Average (ms) | Median (ms) | 95th percentile (ms) | Requests/sec |
 |---|---|---|---|---|---|---|
-| 1 | 675 | 3 | 2736 | 2000 | 4700 | 11.41 |
-| 2 | 1109 | 1 | 1304 | 1200 | 2600 | 18.58 |
-| 3 | 1557 | 1 | 766 | 570 | 1700 | 26.05 |
+| 1 | 663 | 2 | 2660 | 1900 | 4600 | 11.40 |
+| 2 | 1097 | 1 | 1310 | 1200 | 2700 | 18.55 |
+| 3 | 1540 | 1 | 768 | 570 | 1700 | 26.03 |
 
-Tests ran locally with Docker on a MacBook, with 50 simulated users for 60 seconds sending images to `/predict` through an nginx load balancer. Going from 1 to 3 containers raised throughput from 11.4 to 26.1 requests per second (about 2.3x), cut the average response time from 2,736 ms to 766 ms, and cut the 95th percentile from 4,700 ms to 1,700 ms. With one container, requests queued behind each other and response times kept climbing during the test. The gain was not perfectly linear because all containers and Locust shared one laptop's CPU. The few failures were all 502 Bad Gateway errors from nginx under heavy load. Raw results are in the `results/` folder.
+Tests ran locally with Docker on a MacBook, with 50 simulated users for 60 seconds sending images to `/predict` through an nginx load balancer. Going from 1 to 3 containers raised throughput from 11.4 to 26.0 requests per second (about 2.3x), cut the average response time from 2,660 ms to 768 ms, and cut the 95th percentile from 4,600 ms to 1,700 ms. With one container, requests queued behind each other and response times kept climbing during the test. The gain was not perfectly linear because all containers and Locust shared one laptop's CPU. The few failures were all 502 Bad Gateway errors from nginx under heavy load. Raw Locust CSVs are in the `results/` folder (`sample.png` is already in the repo).
 
 ## Cloud deployment
 
-Deployed on AWS EC2 (Ubuntu, instance type: FILL IN, region: FILL IN) with Docker Compose and an Elastic IP. Ports 8501 (UI) and 8080 (API) are open. The `models/` and `data/` folders are mounted as Docker volumes, so retrained models and uploaded images survive restarts. The live demo runs one API container.
+Deployed on AWS EC2 (Ubuntu, Docker Compose, Elastic IP). **Fill in the instance type and region here before you submit** (example: `t3.large`, `eu-north-1`). Ports 8501 (UI) and 8080 (API) are open. The `models/` and `data/` folders are mounted as Docker volumes, so retrained models and uploaded images survive restarts. The live demo runs one API container.
 
-Live retraining check: uploading 10 new images and pressing Retrain on the live app gave accuracy 0.865 and macro-F1 0.765 on the 550 test images, compared with 0.869 and 0.777 for the original model. The small change is expected when fine-tuning on only 10 images.
+### Evaluation in production
+
+On the live app, uploading 10 new images and pressing Retrain re-evaluated the updated model on the 550 held-out test images: accuracy 0.865 and macro-F1 0.765, compared with 0.869 and 0.777 for the original deployed model. The small change is expected when fine-tuning on only 10 images. Dashboard metrics (`/uptime`, `/status`, last retrain JSON) are the production evaluation view: they show the API is up and they report accuracy and macro-F1 after retraining.
+
+Paste the YouTube demo URL in the Links table once the recording is up.
 
 ## Limitations
 
