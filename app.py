@@ -30,13 +30,14 @@ st.markdown("""
 .stApp .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace !important; font-variant-numeric: tabular-nums; }
 .stApp { background: var(--bg); color: var(--ink); }
 [data-testid="stHeader"] { background: transparent; }
-#MainMenu, footer { visibility: hidden; }
+#MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
 .block-container, [data-testid="stMainBlockContainer"] { max-width: 960px; padding: 2.4rem 2rem 3.5rem; }
 [data-testid="stSidebar"] { background: var(--side); border-right: 1px solid var(--rule); }
 .stApp h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
 .stApp h2, .stApp h3 { font-size: 1rem; font-weight: 600; }
 .stApp p, .stApp li, .stApp label, .stApp span { color: var(--ink); }
-[data-testid="stCaptionContainer"] { color: var(--faint) !important; }
+[data-testid="stCaptionContainer"] { display: none !important; }
+[data-testid="stFileUploaderDropzoneInstructions"] small { display: none !important; }
 .stApp button[data-testid="stBaseButton-secondary"], .stApp button[kind="secondary"],
 .stApp button[data-testid="stBaseButton-primary"], .stApp button[kind="primary"] {
   background: var(--primary); border: 1px solid var(--primary); border-radius: 4px;
@@ -47,7 +48,6 @@ st.markdown("""
 .stApp button:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
 [data-testid="stFileUploaderDropzone"] { background: var(--surface); border: 1px solid #BDB8AA; border-radius: 4px; }
 [data-baseweb="select"] > div { background: var(--surface); border-radius: 4px; }
-[data-testid="stMetric"] { background: transparent; }
 .bars { margin: 0.4rem 0 0.8rem; }
 .bar-row { display: grid; grid-template-columns: 11rem 1fr 4.4rem; align-items: center; gap: 0.85rem; padding: 0.45rem 0; }
 .bar-label { font-size: 0.92rem; }
@@ -63,7 +63,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.radio("Menu", ["Dashboard", "Predict", "Visualizations", "Upload & Retrain"])
+page = st.sidebar.radio("Go to", ["Dashboard", "Predict", "Visualizations", "Retrain"], label_visibility="collapsed")
 
 
 def esc(x):
@@ -96,15 +96,14 @@ if page == "Dashboard":
             f'<div class="band">'
             f'<div class="cell"><div class="cell-label">Up-time</div>'
             f'<div class="cell-value mono">{int(up)}s</div></div>'
-            f'<div class="cell"><div class="cell-label">Retraining</div>'
+            f'<div class="cell"><div class="cell-label">Retrain</div>'
             f'<div class="cell-value">{esc(s["status"])}</div></div>'
-            f'<div class="cell"><div class="cell-label">Pending uploads</div>'
+            f'<div class="cell"><div class="cell-label">Pending</div>'
             f'<div class="cell-value mono">{s["pending_uploads"]}</div></div>'
             f"</div>",
             unsafe_allow_html=True,
         )
         if s.get("last_metrics"):
-            st.subheader("Last retrain")
             m = s["last_metrics"]
             st.markdown(
                 f'<div class="band">'
@@ -120,19 +119,19 @@ if page == "Dashboard":
         if s.get("last_error"):
             st.error(s["last_error"])
     except Exception as e:
-        st.error(f"API unreachable: {e}")
+        st.error(str(e))
 
 elif page == "Predict":
     st.title("Predict")
-    f = st.file_uploader("Upload image", type=["png", "jpg", "jpeg"])
+    f = st.file_uploader("Image", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
     if f:
         st.image(f, width=280)
         if st.button("Predict"):
             r = requests.post(f"{API}/predict", files={"file": (f.name, f.getvalue(), f.type)}, timeout=120)
             if r.ok:
                 j = r.json()
-                st.success(f"{LABEL.get(j['prediction'], j['prediction'])} ({j['confidence']:.1%})")
-                bars(j["probabilities"], 1.0, fmt="{:.1%}", highlight=j["prediction"])
+                st.success(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.0%}")
+                bars(j["probabilities"], 1.0, fmt="{:.0%}", highlight=j["prediction"])
             else:
                 st.error(r.text)
 
@@ -140,24 +139,19 @@ elif page == "Visualizations":
     st.title("Visualizations")
     try:
         d = requests.get(f"{API}/insights", timeout=300).json()
-        st.subheader("Images per class")
+        st.subheader("Count")
         bars(d["counts"], max(d["counts"].values()), fmt="{:,.0f}")
-        st.caption("Severe is the smallest class, so accuracy alone is misleading. Macro-F1 is the main metric.")
-
-        st.subheader("Average brightness")
+        st.subheader("Brightness")
         bars(d["brightness"], 255, fmt="{:.0f}")
-        st.caption("Brightness is mostly camera lighting, not disease.")
-
-        st.subheader("Average red channel")
+        st.subheader("Red")
         bars(d["red_mean"], 255, fmt="{:.0f}")
-        st.caption("A single colour average is too coarse. The model has to learn local patterns.")
     except Exception as e:
-        st.error(e)
+        st.error(str(e))
 
 else:
-    st.title("Upload & Retrain")
-    label = st.selectbox("Class of these images", CLASSES, format_func=lambda k: LABEL[k])
-    files = st.file_uploader("Upload multiple images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    st.title("Retrain")
+    label = st.selectbox("Class", CLASSES, format_func=lambda k: LABEL[k])
+    files = st.file_uploader("Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True, label_visibility="collapsed")
     if files and st.button("Upload"):
         r = requests.post(
             f"{API}/upload",
@@ -167,20 +161,18 @@ else:
         )
         if r.ok:
             j = r.json()
-            st.success(f"Saved {j['saved']}. Pending {j['pending_total']} / {j['auto_retrain_threshold']}.")
-            if j.get("auto_retrain_started"):
-                st.info("Auto-retrain started.")
+            st.success(f"{j['saved']} saved · {j['pending_total']} pending")
         else:
             st.error(r.text)
-    if st.button("Trigger retraining"):
+    if st.button("Retrain"):
         r = requests.post(f"{API}/retrain", timeout=30)
         if r.ok:
-            st.success("Retraining started.")
+            st.success("Started")
         else:
             st.error(r.text)
-    if st.button("Refresh status"):
+    if st.button("Status"):
         s = requests.get(f"{API}/status", timeout=10).json()
-        st.write(f"Status: **{s['status']}** · Pending: **{s['pending_uploads']}**")
+        st.write(f"{s['status']} · {s['pending_uploads']} pending")
         if s.get("last_metrics"):
             m = s["last_metrics"]
-            st.write(f"Last retrain — accuracy {m['accuracy']:.1%}, macro-F1 {m['macro_f1']:.3f}")
+            st.write(f"{m['accuracy']:.1%}  {m['macro_f1']:.3f}")
