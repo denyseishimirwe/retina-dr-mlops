@@ -8,10 +8,10 @@ This builds on my earlier Introduction to Machine Learning summative, which used
 
 | | |
 |---|---|
-| **Video demo (YouTube)** | `PASTE YOUTUBE LINK HERE` |
-| **Live app (AWS)** | `PASTE LIVE UI URL HERE` (UI on port 8501) |
-| **Live API docs** | `PASTE LIVE API URL HERE`/docs |
-| **GitHub repo** | `PASTE REPO LINK HERE` |
+| **Video demo (YouTube)** | Coming soon |
+| **Live app (AWS)** | http://13.49.46.69:8501 |
+| **Live API docs** | http://13.49.46.69:8080/docs |
+| **GitHub repo** | https://github.com/denyseishimirwe/retina-dr-mlops |
 
 ## Dataset
 
@@ -152,18 +152,20 @@ locust -f locustfile.py --headless -u 50 -r 5 -t 60s --host http://localhost:808
 
 | API containers | Requests | Failures | Average (ms) | Median (ms) | 95th percentile (ms) | Requests/sec |
 |---|---|---|---|---|---|---|
-| 1 | TBD | TBD | TBD | TBD | TBD | TBD |
-| 2 | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3 | TBD | TBD | TBD | TBD | TBD | TBD |
+| 1 | 675 | 3 | 2736 | 2000 | 4700 | 11.41 |
+| 2 | 1109 | 1 | 1304 | 1200 | 2600 | 18.58 |
+| 3 | 1557 | 1 | 766 | 570 | 1700 | 26.05 |
 
-`WRITE A SHORT SUMMARY OF WHAT THE TABLE SHOWS HERE`
+Tests ran locally with Docker on a MacBook, with 50 simulated users for 60 seconds sending images to `/predict` through an nginx load balancer. Going from 1 to 3 containers raised throughput from 11.4 to 26.1 requests per second (about 2.3x), cut the average response time from 2,736 ms to 766 ms, and cut the 95th percentile from 4,700 ms to 1,700 ms. With one container, requests queued behind each other and response times kept climbing during the test. The gain was not perfectly linear because all containers and Locust shared one laptop's CPU. The few failures were all 502 Bad Gateway errors from nginx under heavy load. Raw results are in the `results/` folder.
 
 ## Cloud deployment
 
-Deployed on AWS EC2 with Docker Compose. `PASTE A SHORT DESCRIPTION HERE (instance type, region, ports)`
+Deployed on AWS EC2 (Ubuntu, instance type: FILL IN, region: FILL IN) with Docker Compose and an Elastic IP. Ports 8501 (UI) and 8080 (API) are open. The `models/` and `data/` folders are mounted as Docker volumes, so retrained models and uploaded images survive restarts. The live demo runs one API container.
+
+Live retraining check: uploading 10 new images and pressing Retrain on the live app gave accuracy 0.865 and macro-F1 0.765 on the 550 test images, compared with 0.869 and 0.777 for the original model. The small change is expected when fine-tuning on only 10 images.
 
 ## Limitations
 
 - Photos from a different camera or with different framing than the training images can confuse the model.
 - The Severe class is rare and the weakest, so this is a learning project and not a medical tool.
-- Retrained models are stored inside the running container, so rebuilding the container returns to the original model file.
+- Retrained models are saved to a Docker volume, so they persist. With several API containers, each keeps its own retraining status, so the live demo uses a single container; multi-container retraining would need shared storage.
