@@ -1,6 +1,7 @@
 import html
 import os
 
+import pandas as pd
 import requests
 import streamlit as st
 
@@ -14,6 +15,16 @@ LABEL = {
 TONE = {"No_DR": "#4F7A3A", "Mild_Moderate": "#B0731A", "Severe_Proliferative": "#A3382E"}
 PRIMARY = "#1F5C63"
 NEUTRAL = "#C9C5B8"
+
+# Reference results from the notebook (550 unseen test images, deployed model)
+REF_ROWS = [
+    ("No DR", 0.970, 0.970, 0.970, 271),
+    ("Mild / moderate", 0.786, 0.893, 0.836, 206),
+    ("Severe / proliferative", 0.689, 0.425, 0.526, 73),
+]
+REF_ACC, REF_F1 = 0.869, 0.777
+REF_CM = [[184, 8, 14], [8, 263, 0], [42, 0, 31]]
+CM_NAMES = ["Mild / moderate", "No DR", "Severe / proliferative"]
 
 st.set_page_config(page_title="Retina DR", layout="wide")
 st.markdown("""
@@ -60,14 +71,35 @@ st.markdown("""
 .cell + .cell { border-left: 1px solid var(--rule); padding-left: 1.1rem; }
 .cell-label { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
 .cell-value { font-size: 1.35rem; font-weight: 500; }
+.note { color: var(--muted); font-size: 0.92rem; margin: 0.1rem 0 1.4rem; max-width: 46rem; }
 </style>
 """, unsafe_allow_html=True)
 
-page = st.sidebar.radio("Go to", ["Dashboard", "Predict", "Visualizations", "Retrain"], label_visibility="collapsed")
+page = st.sidebar.radio(
+    "Go to",
+    ["Dashboard", "Predict", "Visualizations", "Evaluation", "Retrain"],
+    label_visibility="collapsed",
+)
 
 
 def esc(x):
     return html.escape(str(x))
+
+
+def note(text):
+    st.markdown(f'<div class="note">{esc(text)}</div>', unsafe_allow_html=True)
+
+
+def band(cells):
+    """cells: list of (label, value, mono) shown as a 3-column band."""
+    parts = []
+    for label, value, mono in cells:
+        cls = "cell-value mono" if mono else "cell-value"
+        parts.append(
+            f'<div class="cell"><div class="cell-label">{esc(label)}</div>'
+            f'<div class="{cls}">{esc(value)}</div></div>'
+        )
+    st.markdown('<div class="band">' + "".join(parts) + "</div>", unsafe_allow_html=True)
 
 
 def bars(data, vmax, fmt="{:.0f}", highlight=None):
@@ -87,40 +119,47 @@ def bars(data, vmax, fmt="{:.0f}", highlight=None):
     st.markdown('<div class="bars">' + "".join(rows) + "</div>", unsafe_allow_html=True)
 
 
+def status_band(s):
+    m = s.get("last_metrics") or {}
+    band([
+        ("Status", s["status"], False),
+        ("Pending uploads", s["pending_uploads"], True),
+        ("Last macro-F1", f'{m["macro_f1"]:.3f}' if "macro_f1" in m else "-", True),
+    ])
+    if m:
+        band([
+            ("Accuracy", f'{m.get("accuracy", 0):.1%}', True),
+            ("New images used", m.get("trained_on_new_images", 0), True),
+            ("Finished", m.get("timestamp", "-"), True),
+        ])
+    if s.get("last_error"):
+        st.error(s["last_error"])
+
+
+# ----------------------------------------------------------------- Dashboard
 if page == "Dashboard":
     st.title("Dashboard")
     try:
         up = requests.get(f"{API}/uptime", timeout=10).json()["uptime_seconds"]
         s = requests.get(f"{API}/status", timeout=10).json()
-        st.markdown(
-            f'<div class="band">'
-            f'<div class="cell"><div class="cell-label">Up-time</div>'
-            f'<div class="cell-value mono">{int(up)}s</div></div>'
-            f'<div class="cell"><div class="cell-label">Retrain</div>'
-            f'<div class="cell-value">{esc(s["status"])}</div></div>'
-            f'<div class="cell"><div class="cell-label">Pending</div>'
-            f'<div class="cell-value mono">{s["pending_uploads"]}</div></div>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-        if s.get("last_metrics"):
-            m = s["last_metrics"]
-            st.markdown(
-                f'<div class="band">'
-                f'<div class="cell"><div class="cell-label">Accuracy</div>'
-                f'<div class="cell-value mono">{m["accuracy"]:.1%}</div></div>'
-                f'<div class="cell"><div class="cell-label">Macro-F1</div>'
-                f'<div class="cell-value mono">{m["macro_f1"]:.3f}</div></div>'
-                f'<div class="cell"><div class="cell-label">New images</div>'
-                f'<div class="cell-value mono">{m["trained_on_new_images"]}</div></div>'
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+        band([
+            ("Up-time", f"{int(up)}s", True),
+            ("Retrain", s["status"], False),
+            ("Pending", s["pending_uploads"], True),
+        ])
+        m = s.get("last_metrics")
+        if m:
+            band([
+                ("Accuracy", f'{m["accuracy"]:.1%}', True),
+                ("Macro-F1", f'{m["macro_f1"]:.3f}', True),
+                ("New images", m["trained_on_new_images"], True),
+            ])
         if s.get("last_error"):
             st.error(s["last_error"])
     except Exception as e:
         st.error(str(e))
 
+# ------------------------------------------------------------------- Predict
 elif page == "Predict":
     st.title("Predict")
     f = st.file_uploader("Image", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
@@ -130,28 +169,85 @@ elif page == "Predict":
             r = requests.post(f"{API}/predict", files={"file": (f.name, f.getvalue(), f.type)}, timeout=120)
             if r.ok:
                 j = r.json()
-                st.success(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.0%}")
-                bars(j["probabilities"], 1.0, fmt="{:.0%}", highlight=j["prediction"])
+                st.success(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.1%}")
+                bars(j["probabilities"], 1.0, fmt="{:.1%}", highlight=j["prediction"])
             else:
                 st.error(r.text)
 
+# ------------------------------------------------------------ Visualizations
 elif page == "Visualizations":
     st.title("Visualizations")
     try:
-        d = requests.get(f"{API}/insights", timeout=300).json()
-        st.subheader("Count")
+        with st.spinner("Loading..."):
+            d = requests.get(f"{API}/insights", timeout=300).json()
+        st.subheader("1. Images per class")
         bars(d["counts"], max(d["counts"].values()), fmt="{:,.0f}")
-        st.subheader("Brightness")
+        note("No DR has far more images than the other classes, so accuracy alone would be "
+             "misleading. That is why class weights and macro-F1 are used.")
+        st.subheader("2. Average brightness")
         bars(d["brightness"], 255, fmt="{:.0f}")
-        st.subheader("Red")
+        note("Brightness is almost the same across classes. It reflects the camera and "
+             "lighting, not the disease, so it cannot separate them.")
+        st.subheader("3. Average red channel")
         bars(d["red_mean"], 255, fmt="{:.0f}")
+        note("Red averages overlap heavily between classes, so simple colour statistics tell "
+             "us little. A deep model is needed to learn patterns such as red dots and "
+             "yellow patches.")
     except Exception as e:
         st.error(str(e))
 
+# ---------------------------------------------------------------- Evaluation
+elif page == "Evaluation":
+    st.title("Evaluation")
+
+    st.subheader("Reference model (notebook, 550 unseen test images)")
+    st.table(
+        pd.DataFrame(REF_ROWS, columns=["Class", "Precision", "Recall", "F1", "Images"]).set_index("Class")
+    )
+    band([
+        ("Accuracy", f"{REF_ACC:.3f}", True),
+        ("Macro-F1", f"{REF_F1:.3f}", True),
+        ("Test images", 550, True),
+    ])
+
+    st.subheader("Confusion matrix (rows are the true class)")
+    st.table(
+        pd.DataFrame(
+            REF_CM,
+            index=[f"True: {n}" for n in CM_NAMES],
+            columns=[f"Predicted: {n}" for n in CM_NAMES],
+        )
+    )
+    note("No Severe image was predicted as No DR. The missed Severe cases were labelled "
+         "Mild / moderate. The test set has only 73 Severe images, so this result is noisy.")
+
+    st.subheader("Model in production")
+    try:
+        s = requests.get(f"{API}/status", timeout=10).json()
+        m = s.get("last_metrics")
+        if m:
+            cmp = pd.DataFrame(
+                {"Reference": [REF_ACC, REF_F1],
+                 "After last retrain": [m["accuracy"], m["macro_f1"]]},
+                index=["Accuracy", "Macro-F1"],
+            )
+            cmp["Change"] = cmp["After last retrain"] - cmp["Reference"]
+            st.table(cmp.round(3))
+            note(f"Retrained on {m['trained_on_new_images']} new images and tested on "
+                 f"{m['n_test']} images.")
+        else:
+            note("No retraining yet. The deployed model is the reference model.")
+    except Exception as e:
+        st.error(str(e))
+
+# ------------------------------------------------------------------- Retrain
 else:
     st.title("Retrain")
     label = st.selectbox("Class", CLASSES, format_func=lambda k: LABEL[k])
-    files = st.file_uploader("Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True, label_visibility="collapsed")
+    files = st.file_uploader(
+        "Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True,
+        label_visibility="collapsed",
+    )
     if files and st.button("Upload"):
         r = requests.post(
             f"{API}/upload",
@@ -167,12 +263,19 @@ else:
     if st.button("Retrain"):
         r = requests.post(f"{API}/retrain", timeout=30)
         if r.ok:
-            st.success("Started")
+            st.success("Retraining started")
         else:
             st.error(r.text)
-    if st.button("Status"):
-        s = requests.get(f"{API}/status", timeout=10).json()
-        st.write(f"{s['status']} · {s['pending_uploads']} pending")
-        if s.get("last_metrics"):
-            m = s["last_metrics"]
-            st.write(f"{m['accuracy']:.1%}  {m['macro_f1']:.3f}")
+
+    st.subheader("Live status")
+
+    @st.fragment(run_every=3)
+    def live_status():
+        try:
+            s = requests.get(f"{API}/status", timeout=10).json()
+        except Exception as e:
+            st.error(str(e))
+            return
+        status_band(s)
+
+    live_status()
