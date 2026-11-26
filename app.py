@@ -73,32 +73,12 @@ st.markdown("""
 .cell-value { font-size: 1.35rem; font-weight: 500; }
 .note { color: var(--muted); font-size: 0.92rem; margin: 0.1rem 0 1.4rem; max-width: 46rem; }
 
-/* Alert boxes (st.error / st.success / st.info / st.warning) */
-[data-testid="stAlert"],
-[data-testid="stAlertContainer"] {
-  background: #FFFFFF !important;
-  border: 1px solid var(--rule) !important;
-  border-left: 4px solid var(--primary) !important;
-  border-radius: 4px !important;
-}
-[data-testid="stAlert"] *,
-[data-testid="stAlertContainer"] * {
-  color: var(--ink) !important;
-}
-
-/* Colour the left edge and tint by type (newer Streamlit versions) */
-[data-testid="stAlertContainer"]:has([data-testid="stAlertContentError"]) {
-  border-left-color: #A3382E !important;
-  background: #FBEFED !important;
-}
-[data-testid="stAlertContainer"]:has([data-testid="stAlertContentSuccess"]) {
-  border-left-color: #4F7A3A !important;
-  background: #F0F5EC !important;
-}
-[data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) {
-  border-left-color: #B0731A !important;
-  background: #FBF3E6 !important;
-}
+/* Custom result boxes */
+.alert { padding: 0.85rem 1.1rem; margin: 0.5rem 0 1rem; border-radius: 4px;
+  background: #FFFFFF; border: 1px solid var(--rule); border-left: 4px solid var(--primary);
+  color: var(--ink); font-size: 0.95rem; word-break: break-word; }
+.alert.error { background: #FBEFED; border-left-color: #A3382E; }
+.alert.success { background: #F0F5EC; border-left-color: #4F7A3A; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,6 +91,18 @@ page = st.sidebar.radio(
 
 def esc(x):
     return html.escape(str(x))
+
+
+def alert(kind, text):
+    st.markdown(f'<div class="alert {kind}">{esc(text)}</div>', unsafe_allow_html=True)
+
+
+def err(text):
+    alert("error", text)
+
+
+def ok(text):
+    alert("success", text)
 
 
 def note(text):
@@ -160,7 +152,7 @@ def status_band(s):
             ("Finished", m.get("timestamp", "-"), True),
         ])
     if s.get("last_error"):
-        st.error(s["last_error"])
+        err(s["last_error"])
 
 
 # ----------------------------------------------------------------- Dashboard
@@ -182,9 +174,9 @@ if page == "Dashboard":
                 ("New images", m["trained_on_new_images"], True),
             ])
         if s.get("last_error"):
-            st.error(s["last_error"])
+            err(s["last_error"])
     except Exception as e:
-        st.error(str(e))
+        err(str(e))
 
 # ------------------------------------------------------------------- Predict
 elif page == "Predict":
@@ -196,10 +188,10 @@ elif page == "Predict":
             r = requests.post(f"{API}/predict", files={"file": (f.name, f.getvalue(), f.type)}, timeout=120)
             if r.ok:
                 j = r.json()
-                st.success(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.1%}")
+                ok(f"{LABEL.get(j['prediction'], j['prediction'])}  {j['confidence']:.1%}")
                 bars(j["probabilities"], 1.0, fmt="{:.1%}", highlight=j["prediction"])
             else:
-                st.error(r.text)
+                err(r.text)
 
 # ------------------------------------------------------------ Visualizations
 elif page == "Visualizations":
@@ -221,7 +213,7 @@ elif page == "Visualizations":
              "us little. A deep model is needed to learn patterns such as red dots and "
              "yellow patches.")
     except Exception as e:
-        st.error(str(e))
+        err(str(e))
 
 # ---------------------------------------------------------------- Evaluation
 elif page == "Evaluation":
@@ -265,7 +257,7 @@ elif page == "Evaluation":
         else:
             note("No retraining yet. The deployed model is the reference model.")
     except Exception as e:
-        st.error(str(e))
+        err(str(e))
 
 # ------------------------------------------------------------------- Retrain
 else:
@@ -284,15 +276,15 @@ else:
         )
         if r.ok:
             j = r.json()
-            st.success(f"{j['saved']} saved · {j['pending_total']} pending")
+            ok(f"{j['saved']} saved · {j['pending_total']} pending")
         else:
-            st.error(r.text)
+            err(r.text)
     if st.button("Retrain"):
         r = requests.post(f"{API}/retrain", timeout=30)
         if r.ok:
-            st.success("Retraining started")
+            ok("Retraining started")
         else:
-            st.error(r.text)
+            err(r.text)
 
     st.subheader("Live status")
 
@@ -301,7 +293,7 @@ else:
         try:
             s = requests.get(f"{API}/status", timeout=10).json()
         except Exception as e:
-            st.error(str(e))
+            err(str(e))
             return
         status_band(s)
 
