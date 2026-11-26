@@ -7,9 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.preprocessing import *
 from src import prediction
 from src import model as trainer
+from src import database
 
 app = FastAPI(title="Retina DR API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+database.init_db()
 
 START = time.time()
 THRESHOLD = int(os.getenv("AUTO_RETRAIN_THRESHOLD", "50"))
@@ -20,11 +22,20 @@ _insights = {}
 
 def _run_retrain():
     try:
+        pending_uploads = database.get_pending_uploads()
+
         m = trainer.retrain()
+
+        database.mark_trained(
+            [item[0] for item in pending_uploads]
+        )
+
         prediction.get_model(reload=True)
         state.update(status="idle", last_metrics=m, last_error=None)
+
     except Exception as e:
         state.update(status="idle", last_error=str(e))
+        
 
 
 def _start_retrain():
@@ -37,7 +48,7 @@ def _start_retrain():
 
 
 def _pending():
-    return len(list_images(UPLOAD_DIR)[0])
+    return database.count_pending()
 
 
 @app.get("/health")
@@ -68,8 +79,19 @@ async def upload(label: str = Form(...), files: List[UploadFile] = File(...)):
     saved = 0
     for f in files:
         name = f"{int(time.time()*1000)}_{saved}_{os.path.basename(f.filename)}"
-        with open(os.path.join(dest, name), "wb") as out:
-            out.write(await f.read())
+        image_data = await f.read()
+        file_path = os.path.join(dest, name)
+
+        with open(file_path, "wb") as out:
+            out.write(image_data)
+
+        database.save_upload(
+            filename=name,
+            label=label,
+            image_data=image_data,
+            stored_path=file_path
+        )
+
         saved += 1
     pending = _pending()
     auto = False

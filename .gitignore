@@ -5,3 +5,6 @@ models/backup_*
 .venv/
 .DS_Store
 models/retina_model.h5
+data/retina.db
+data/retina.db-shm
+data/retina.db-wal

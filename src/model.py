@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.utils.class_weight import compute_class_weight
 from src.preprocessing import *
+from src import database
 
 
 def build_model():
@@ -65,9 +66,13 @@ def train(epochs=15):
 
 
 def retrain(epochs=5, per_class_old=150):
-    new_p, new_l = list_images(UPLOAD_DIR)
+    pending_uploads = database.get_pending_uploads()
+
+    new_p = [item[0] for item in pending_uploads]
+    new_l = [LABEL_TO_IDX[item[1]] for item in pending_uploads]
+
     if not new_p:
-        raise ValueError("No uploaded images found in data/uploads")
+        raise ValueError("No uploaded images found in the database")
     old_p, old_l = list_images(TRAIN_DIR)
 
     rng = random.Random(42)
